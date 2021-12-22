@@ -24,7 +24,7 @@ const ImageGalleryContainer = ({ searchImageName }) => {
 
   const [pageSize] = useState(12);
   const prevImage = useRef(null);
-  const prevPage = useRef(1);
+  const prevPage = useRef(0);
 
   // ==================================================
   useEffect(() => {
@@ -33,17 +33,20 @@ const ImageGalleryContainer = ({ searchImageName }) => {
     }
 
     if (prevImage.current !== searchImageName) {
-      setPageNumber(1);
+      prevPage.current = 0;
+      // setPageNumber(1);
     }
+    const newPageNumber =
+      prevImage.current !== searchImageName ? 1 : pageNumber;
 
     if (
       prevImage.current !== searchImageName ||
-      prevPage.current < pageNumber
+      prevPage.current < newPageNumber
     ) {
       setStatus('pending');
 
       imagesAPI
-        .fetchImages(searchImageName, pageNumber, pageSize)
+        .fetchImages(searchImageName, newPageNumber, pageSize)
         .then(data => {
           if (data.hits.length === 0) {
             return toast.error(
@@ -58,7 +61,12 @@ const ImageGalleryContainer = ({ searchImageName }) => {
             setTotalImages(data.total);
           }
 
+          if (prevImage.current !== searchImageName) {
+            setPageNumber(1);
+          }
           prevImage.current = searchImageName;
+          prevPage.current = newPageNumber;
+
           setStatus('resolved');
         })
         .catch(error => {
