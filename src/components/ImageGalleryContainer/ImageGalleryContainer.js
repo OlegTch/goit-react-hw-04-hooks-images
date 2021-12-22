@@ -1,140 +1,118 @@
-import PropTypes from "prop-types";
-import { Component } from "react";
+import PropTypes from 'prop-types';
+import { useState, useEffect, useRef } from 'react';
 
-import { toast } from "react-toastify";
+import { toast } from 'react-toastify';
 
-import ImageGallery from "../ImageGallery/ImageGallery";
-import Button from "../Button/Button";
-import Loader from "../Loader/Loader";
-import Modal from "../Modal/Modal";
+import ImageGallery from '../ImageGallery/ImageGallery';
+import Button from '../Button/Button';
+import Loader from '../Loader/Loader';
+import Modal from '../Modal/Modal';
+import imagesAPI from '../../services/image-api';
 
-const BASE_URL = `https://pixabay.com/api/`;
-const API_KEY = `23915751-8a3ca73cec67b4d724eaf6158`;
-// let pageNumber = 1;
-const pageSize = 12;
+import img from '../../images/find.jpg';
+import styles from '../ImageGallery/ImageGallery.module.css';
 
-class ImageGalleryContainer extends Component {
-  state = {
-    searchImage: "",
-    fetchedImages: null,
-    // loading: false,
-    error: null,
-    status: "idle",
-    totalImages: 0,
-    pageNumber: 1,
+const ImageGalleryContainer = ({ searchImageName }) => {
+  // const [searchImage, setSearchImage] = useState('');
+  const [fetchedImages, setFetchedImages] = useState(null);
+  const [error, setError] = useState(null);
+  const [status, setStatus] = useState('idle');
+  const [totalImages, setTotalImages] = useState(0);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [showModal, setShowModal] = useState(false);
+  const [modalImage, setModalImage] = useState(null);
 
-    showModal: false,
-    modalImage: null,
-  };
+  const [pageSize] = useState(12);
+  const prevImage = useRef(null);
+  const prevPage = useRef(1);
 
-  componentDidUpdate(prevProps, prevState) {
-    const prevImage = prevProps.searchImageName;
-    const nextImage = this.props.searchImageName;
-
-    if (prevImage !== nextImage) {
-      this.resetPage();
+  // ==================================================
+  useEffect(() => {
+    if (!searchImageName) {
+      return;
     }
 
-    const pageNumber = prevImage !== nextImage ? 1 : this.state.pageNumber;
+    if (prevImage.current !== searchImageName) {
+      setPageNumber(1);
+    }
 
-    if (prevImage !== nextImage || prevState.pageNumber < pageNumber) {
-      this.setState({ status: "pending" });
+    if (
+      prevImage.current !== searchImageName ||
+      prevPage.current < pageNumber
+    ) {
+      setStatus('pending');
 
-      fetch(
-        `${BASE_URL}?q=${nextImage}&page=${pageNumber}&key=${API_KEY}&image_type=photo&orientation=horizontal&per_page=${pageSize}`
-      )
-        .then((response) => {
-          if (response.ok) {
-            console.log("response", response.ok);
-            return response.json();
-          }
-          return Promise.reject(new Error(`Something wrong. Please try again`));
-        })
-        .then((data) => {
+      imagesAPI
+        .fetchImages(searchImageName, pageNumber, pageSize)
+        .then(data => {
           if (data.hits.length === 0) {
             return toast.error(
-              `Invalid request name ${nextImage}. Please try again`
+              `Invalid request name ${searchImageName}. Please try again`,
             );
           }
-          prevImage === nextImage
-            ? this.setState(({ fetchedImages }) => ({
-                fetchedImages: [...fetchedImages, ...data.hits],
-                status: "resolved",
-              }))
-            : this.setState(() => ({
-                fetchedImages: data.hits,
-                status: "resolved",
-                totalImages: data.total,
-              }));
+
+          if (prevImage.current === searchImageName) {
+            setFetchedImages(fetchedImages => [...fetchedImages, ...data.hits]);
+          } else {
+            setFetchedImages(data.hits);
+            setTotalImages(data.total);
+          }
+
+          prevImage.current = searchImageName;
+          setStatus('resolved');
         })
-        .catch((error) => this.setState({ error, status: "rejected" }));
+        .catch(error => {
+          setError(error);
+          setStatus('rejected');
+        });
     }
-  }
+  }, [pageNumber, searchImageName, pageSize]);
 
-  handleLodeMoreButton = (event) => {
-    this.setState({ status: "pending" });
-    this.setState(({ pageNumber }) => ({ pageNumber: pageNumber + 1 }));
+  // ==================================================
+  const handleLodeMoreButton = event => {
+    setPageNumber(pageNumber => pageNumber + 1);
+    setStatus('pending');
   };
 
-  resetPage = () => {
-    this.setState({ pageNumber: 1 });
-  };
-
-  openModal = (event) => {
-    const { fetchedImages } = this.state;
+  const openModal = event => {
     event.preventDefault();
-    this.setState({ showModal: true });
+    setShowModal(true);
     const largeImage = fetchedImages.find(
-      (image) => event.target.src === image.webformatURL
+      image => event.target.src === image.webformatURL,
     );
-
-    this.setState({ modalImage: largeImage });
+    setModalImage(largeImage);
   };
 
-  closeModal = () => {
-    this.setState({ showModal: false });
+  const closeModal = () => {
+    setShowModal(false);
   };
 
-  render() {
-    const { fetchedImages, error, status, modalImage, showModal, totalImages } =
-      this.state;
-
-    if (status === "idle") {
-      return (
-        <img
-          src="https://pixabay.com/get/gf3615c19298c92d3b82e8740d84c535f9288cc1f4e2dbd059d6cc1aa67149b49b9bf31ae912e5f5b396e269e70768b7a46d43a5a936c45d5082e8e505d8474ef_1280.jpg"
-          alt="search images"
-        />
-      );
-    }
-
-    if (status === "pending") {
-      return <Loader />;
-    }
-
-    if (status === "rejected") {
-      return <p className="errorText">{error.message}</p>;
-    }
-
-    if (status === "resolved") {
-      return (
-        <>
-          <ImageGallery
-            fetchedImages={fetchedImages}
-            onOpenModal={this.openModal}
-          />
-          {fetchedImages.length < totalImages && (
-            <Button handleButton={this.handleLodeMoreButton} />
-          )}
-
-          {showModal && (
-            <Modal onClose={this.closeModal} image={modalImage}></Modal>
-          )}
-        </>
-      );
-    }
+  // ==================================================
+  if (status === 'idle') {
+    return <img className={styles.img} src={img} alt="search images"></img>;
   }
-}
+
+  if (status === 'pending') {
+    return <Loader />;
+  }
+
+  if (status === 'rejected') {
+    return <p className="errorText">{error.message}</p>;
+  }
+
+  if (status === 'resolved') {
+    return (
+      <>
+        <ImageGallery fetchedImages={fetchedImages} onOpenModal={openModal} />
+        {fetchedImages.length < totalImages && (
+          <Button handleButton={handleLodeMoreButton} />
+        )}
+
+        {showModal && <Modal onClose={closeModal} image={modalImage}></Modal>}
+      </>
+    );
+  }
+};
 
 ImageGalleryContainer.propTypes = {
   searchImage: PropTypes.string,
@@ -143,7 +121,7 @@ ImageGalleryContainer.propTypes = {
       id: PropTypes.number,
       webformatURL: PropTypes.string,
       tags: PropTypes.string,
-    })
+    }),
   ),
   totalImages: PropTypes.number,
   pageNumber: PropTypes.number,
@@ -151,6 +129,10 @@ ImageGalleryContainer.propTypes = {
   error: PropTypes.bool,
   showModal: PropTypes.bool,
   modalImage: PropTypes.string,
+
+  pageSize: PropTypes.number,
+  prevImage: PropTypes.string,
+  prevPage: PropTypes.number,
 };
 
 export default ImageGalleryContainer;
